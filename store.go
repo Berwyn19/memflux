@@ -1,7 +1,8 @@
-package main
+package memflux
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -11,8 +12,17 @@ type entry struct {
 }
 
 type Store struct {
-	lock sync.RWMutex
-	mp   map[string]entry
+	lock      sync.RWMutex
+	mp        map[string]entry
+	hitCount  int64
+	missCount int64
+	evictions int64
+}
+
+type StoreStats struct {
+	Hits      int64
+	Misses    int64
+	Evictions int64
 }
 
 func (s *Store) Set(key string, value string, ttl time.Duration) {
@@ -37,15 +47,18 @@ func (s *Store) Get(key string) (string, bool) {
 	// Fail to get key, immediately return
 	entry, ok := s.mp[key]
 	if !ok {
+		atomic.AddInt64(&s.missCount, 1)
 		return "", false
 	}
 
 	// If expired, reject request
 	if !entry.expiresAt.IsZero() && time.Now().After(entry.expiresAt) {
+		atomic.AddInt64(&s.missCount, 1)
 		return "", false
 	}
 
 	// Key exists, return value
+	atomic.AddInt64(&s.hitCount, 1)
 	return entry.value, true
 }
 
@@ -78,9 +91,26 @@ func (s *Store) sweep() {
 				continue
 			}
 			if !entry.expiresAt.IsZero() && time.Now().After(entry.expiresAt) {
+				atomic.AddInt64(&s.evictions, 1)
 				delete(s.mp, key)
 			}
 		}
 		s.lock.Unlock()
 	}
+}
+
+// Function to retrieve the store statistics
+func (s *Store) Stats() StoreStats {
+	return StoreStats{
+		Hits:      atomic.LoadInt64(&s.hitCount),
+		Misses:    atomic.LoadInt64(&s.missCount),
+		Evictions: atomic.LoadInt64(&s.evictions),
+	}
+}
+
+// Initialize the store and start the sweep routine
+func NewStore() *Store {
+	s := &Store{mp: make(map[string]entry)}
+	go s.sweep()
+	return s
 }
