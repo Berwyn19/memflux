@@ -25,22 +25,21 @@ type LeaderClient struct {
 }
 
 func NewLeaderClient(addresses []string) *LeaderClient {
-	leaderClient := LeaderClient{}
+	lc := &LeaderClient{}
 	for _, address := range addresses {
 		conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			log.Printf("failed to connect to follower %s: %v", address, err)
 			continue
 		}
-		client := pb.NewReplicationClient(conn)
-		follower := &Follower{
+		lc.followers = append(lc.followers, &Follower{
 			address: address,
-			client:  client,
+			client:  pb.NewReplicationClient(conn),
 			healthy: true,
-		}
-		leaderClient.followers = append(leaderClient.followers, follower)
+		})
 	}
-	return &leaderClient
+	go lc.recoverFollowers()
+	return lc
 }
 
 func (lc *LeaderClient) Replicate(operation, key, value string, ttlSeconds int64) {
@@ -56,7 +55,7 @@ func (lc *LeaderClient) Replicate(operation, key, value string, ttlSeconds int64
 		lc.mu.Lock()
 		healthy := follower.healthy
 		lc.mu.Unlock()
-		if healthy {
+		if !healthy { // BUG-2 fix: was `if healthy`
 			continue
 		}
 
@@ -78,6 +77,32 @@ func (lc *LeaderClient) Replicate(operation, key, value string, ttlSeconds int64
 			follower.healthy = false
 			lc.mu.Unlock()
 			log.Printf("marking follower %s as unhealthy", follower.address)
+		}
+	}
+}
+
+// recoverFollowers probes unhealthy followers every 10 seconds and restores
+// them when they respond to a heartbeat. (BUG-4 fix)
+func (lc *LeaderClient) recoverFollowers() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		for _, follower := range lc.followers {
+			lc.mu.Lock()
+			healthy := follower.healthy
+			lc.mu.Unlock()
+			if healthy {
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			_, err := follower.client.HeartBeat(ctx, &pb.HeartBeatRequest{})
+			cancel()
+			if err == nil {
+				lc.mu.Lock()
+				follower.healthy = true
+				lc.mu.Unlock()
+				log.Printf("follower %s recovered, marking healthy", follower.address)
+			}
 		}
 	}
 }

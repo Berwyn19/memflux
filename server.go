@@ -25,7 +25,7 @@ func (s *ReplicationServer) Replicate(ctx context.Context, req *pb.ReplicateRequ
 	} else if req.Operation == "delete" {
 		s.store.Delete(req.Key)
 	} else {
-		return &pb.ReplicateResponse{Success: false, Error: "unknown opperation"}, nil
+		return &pb.ReplicateResponse{Success: false, Error: "unknown operation"}, nil
 	}
 	return &pb.ReplicateResponse{Success: true}, nil
 }
