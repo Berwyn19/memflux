@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package node;
+
+option go_package = "memflux/proto";
+
+service Replication {
+    rpc Replicate(ReplicateRequest) returns (ReplicateResponse);
+    rpc HeartBeat(HeartBeatRequest) returns (HeartBeatResponse);
+}
+
+message ReplicateRequest {
+    string key = 1;
+    string value = 2;
+    int64 ttl_seconds = 3;
+    int64 sequence = 4;
+    string operation = 5;
+}
+
+message ReplicateResponse {
+    bool success = 1;
+    string error = 2;
+}
+
+message HeartBeatRequest {
+    string leader_id = 1;
+}
+
+message HeartBeatResponse {
+    bool alive = 1;
+}
