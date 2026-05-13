@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Replication_Replicate_FullMethodName = "/node.Replication/Replicate"
-	Replication_HeartBeat_FullMethodName = "/node.Replication/HeartBeat"
+	Replication_Replicate_FullMethodName   = "/node.Replication/Replicate"
+	Replication_HeartBeat_FullMethodName   = "/node.Replication/HeartBeat"
+	Replication_RequestVote_FullMethodName = "/node.Replication/RequestVote"
 )
 
 // ReplicationClient is the client API for Replication service.
@@ -29,6 +30,7 @@ const (
 type ReplicationClient interface {
 	Replicate(ctx context.Context, in *ReplicateRequest, opts ...grpc.CallOption) (*ReplicateResponse, error)
 	HeartBeat(ctx context.Context, in *HeartBeatRequest, opts ...grpc.CallOption) (*HeartBeatResponse, error)
+	RequestVote(ctx context.Context, in *RequestVoteRequest, opts ...grpc.CallOption) (*RequestVoteResponse, error)
 }
 
 type replicationClient struct {
@@ -59,12 +61,23 @@ func (c *replicationClient) HeartBeat(ctx context.Context, in *HeartBeatRequest,
 	return out, nil
 }
 
+func (c *replicationClient) RequestVote(ctx context.Context, in *RequestVoteRequest, opts ...grpc.CallOption) (*RequestVoteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RequestVoteResponse)
+	err := c.cc.Invoke(ctx, Replication_RequestVote_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ReplicationServer is the server API for Replication service.
 // All implementations must embed UnimplementedReplicationServer
 // for forward compatibility.
 type ReplicationServer interface {
 	Replicate(context.Context, *ReplicateRequest) (*ReplicateResponse, error)
 	HeartBeat(context.Context, *HeartBeatRequest) (*HeartBeatResponse, error)
+	RequestVote(context.Context, *RequestVoteRequest) (*RequestVoteResponse, error)
 	mustEmbedUnimplementedReplicationServer()
 }
 
@@ -80,6 +93,9 @@ func (UnimplementedReplicationServer) Replicate(context.Context, *ReplicateReque
 }
 func (UnimplementedReplicationServer) HeartBeat(context.Context, *HeartBeatRequest) (*HeartBeatResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method HeartBeat not implemented")
+}
+func (UnimplementedReplicationServer) RequestVote(context.Context, *RequestVoteRequest) (*RequestVoteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RequestVote not implemented")
 }
 func (UnimplementedReplicationServer) mustEmbedUnimplementedReplicationServer() {}
 func (UnimplementedReplicationServer) testEmbeddedByValue()                     {}
@@ -138,6 +154,24 @@ func _Replication_HeartBeat_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Replication_RequestVote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestVoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplicationServer).RequestVote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Replication_RequestVote_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplicationServer).RequestVote(ctx, req.(*RequestVoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Replication_ServiceDesc is the grpc.ServiceDesc for Replication service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +186,10 @@ var Replication_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "HeartBeat",
 			Handler:    _Replication_HeartBeat_Handler,
+		},
+		{
+			MethodName: "RequestVote",
+			Handler:    _Replication_RequestVote_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

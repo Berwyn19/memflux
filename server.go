@@ -8,14 +8,16 @@ import (
 
 type ReplicationServer struct {
 	pb.UnimplementedReplicationServer
-	store  *Store
-	nodeID string
+	store    *Store
+	nodeID   string
+	raftNode *RaftNode
 }
 
-func NewReplicationServer(store *Store, nodeID string) *ReplicationServer {
+func NewReplicationServer(store *Store, nodeID string, raftNode *RaftNode) *ReplicationServer {
 	return &ReplicationServer{
-		store:  store,
-		nodeID: nodeID,
+		store:    store,
+		nodeID:   nodeID,
+		raftNode: raftNode,
 	}
 }
 
@@ -31,5 +33,11 @@ func (s *ReplicationServer) Replicate(ctx context.Context, req *pb.ReplicateRequ
 }
 
 func (s *ReplicationServer) HeartBeat(ctx context.Context, req *pb.HeartBeatRequest) (*pb.HeartBeatResponse, error) {
-	return &pb.HeartBeatResponse{Alive: true}, nil
+	term, reject := s.raftNode.HandleHeartbeat(req.Term, req.LeaderId)
+	return &pb.HeartBeatResponse{Alive: !reject, Term: term}, nil
+}
+
+func (s *ReplicationServer) RequestVote(ctx context.Context, req *pb.RequestVoteRequest) (*pb.RequestVoteResponse, error) {
+	term, granted := s.raftNode.HandleRequestVote(req.Term, req.CandidateId)
+	return &pb.RequestVoteResponse{Term: term, VoteGranted: granted}, nil
 }
